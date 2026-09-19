@@ -7,6 +7,4 @@ Added a new feature/mechanic to limit how many enchantments can be added to the 
 If the weapon/tools still have applicable enchantment, then the new enchantment will replace random existing enchantment.
 The limit can be change in the config file, or using GMCM.
 
-Maybe will added other things.
-
 Original Mod: [https://github.com/SlivaStari/ManyEnchantments](https://github.com/SlivaStari/ManyEnchantments)
