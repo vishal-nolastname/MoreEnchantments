@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
@@ -8,19 +9,22 @@ using StardewValley;
 using StardewValley.Tools;
 using StardewValley.Enchantments;
 using HarmonyLib;
+using GenericModConfigMenu;
 
-namespace ManyEnchantments
+namespace MoreEnchantments
 {
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
         internal static IMonitor ModMonitor { get; set; }
         internal new static IModHelper Helper { get; set; }
+        internal static ModConfig Config { get; set; }
 
         public override void Entry(IModHelper helper)
         {
             ModMonitor = Monitor;
             Helper = helper;
+            Config = helper.ReadConfig<ModConfig>();
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
         }
@@ -28,7 +32,7 @@ namespace ManyEnchantments
         private void OnGameLaunched(object sender, EventArgs e)
         {
             // Override Tool & ForgeMenu functionality
-            var harmony = new Harmony("Stari.ManyEnchantments");
+            var harmony = new Harmony("Lowkeeshall.MoreEnchantments");
             harmony.Patch(
                 original: AccessTools.Method(typeof(Tool), nameof(Tool.AddEnchantment)),
                 prefix: new HarmonyMethod(typeof(ModEntry), nameof(ModEntry.AddEnchantment_Prefix))
@@ -60,6 +64,28 @@ namespace ManyEnchantments
             harmony.Patch(
                 original: AccessTools.Method(typeof(StardewValley.Menus.ForgeMenu), nameof(StardewValley.Menus.ForgeMenu.receiveLeftClick)),
                 prefix: new HarmonyMethod(typeof(ModEntry), nameof(ModEntry.ReceiveLeftClick_Prefix))
+            );
+
+            // get Generic Mod Config Menu's API (if it's installed)
+            var configMenu = Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
+            if (configMenu is null)
+                return;
+
+            // register mod in GMCM
+            configMenu.Register(
+                mod: this.ModManifest,
+                reset: () => Config = new ModConfig(),
+                save: () => Helper.WriteConfig(Config)
+            );
+            configMenu.AddNumberOption(
+                mod: this.ModManifest,
+                name: () => "Maximum Enchantments",
+                tooltip: () => "The Maximum enchantments of the weapon/tools. (Crusader, Vampiric, etc.)",
+                getValue: () => Config.MaxPrimaryEnchantments,
+                setValue: value => Config.MaxPrimaryEnchantments = value,
+                min: 1,
+                max: 5,
+                interval: 1
             );
         }
         public static List<int> GetValidForgeEnchantmentsForTool(Tool __instance)
@@ -398,9 +424,32 @@ namespace ManyEnchantments
                 {
                     return true;
                 }
+
                 if (!enchantment.IsForge() && !enchantment.IsSecondaryEnchantment())
                 {
                     // Enchantment is a primary enchantment.
+                    var primaryEnchantments = __instance.enchantments
+                        .Where(e => !e.IsForge() && !e.IsSecondaryEnchantment())
+                        .ToList();
+
+                    // If the item enchantments count is more than the maximum allowed, remove random primary enchantments.
+                    while (primaryEnchantments.Count >= Config.MaxPrimaryEnchantments)
+                    {
+                        int index = Game1.random.Next(primaryEnchantments.Count);
+                        BaseEnchantment toRemove = primaryEnchantments[index];
+
+                        // This gets displayed twice because the game does it once to display the "Result" item in the menu.
+                        // Because of that, you will may see a different primary enchantment being removed than the one that is actually removed.
+                        ModMonitor.Log(
+                            $"Replacing primary enchantment {toRemove.GetDisplayName()} with {enchantment.GetDisplayName()}",
+                            LogLevel.Debug);
+
+                        __instance.RemoveEnchantment(toRemove);
+                        primaryEnchantments.RemoveAt(index);
+                    }
+                    __instance.previousEnchantments.Clear();
+
+                    // Add a new primary enchantment.
                     __instance.enchantments.Add(enchantment);
                     enchantment.ApplyTo(__instance, __instance.getLastFarmerToUse());
                     __result = true;

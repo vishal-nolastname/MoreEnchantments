@@ -1,12 +1,9 @@
 ﻿using System;
-namespace CombineManyRings
+
+namespace MoreEnchantments
 {
     public sealed class ModConfig
     {
-        public bool AllowSameRing { get; set; } = false;
-        public bool BalancedMode { get; set; } = false;
-        public bool DestroyRingOnFailure { get; set; } = false;
-        public int FailureChancePerExtraRing { get; set; } = 20;
-        public int CostPerExtraRing { get; set; } = 100;
+        public int MaxPrimaryEnchantments { get; set; } = 2;
     }
 }
